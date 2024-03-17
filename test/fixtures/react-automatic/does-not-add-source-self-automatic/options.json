@@ -1,0 +1,11 @@
+{
+  "plugins": [
+    [
+      "transform-fast-react-jsx",
+      {
+        "autoImport": "namedExports",
+        "runtime": "automatic"
+      }
+    ]
+  ]
+}

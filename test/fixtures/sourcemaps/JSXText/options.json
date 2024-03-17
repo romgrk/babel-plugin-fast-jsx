@@ -1,0 +1,5 @@
+{
+  "sourceType": "module",
+  "plugins": [["transform-fast-react-jsx", { "runtime": "classic" }]],
+  "sourceMaps": true
+}

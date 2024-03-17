@@ -1,0 +1,6 @@
+{
+  "plugins": [
+    ["transform-fast-react-jsx", { "runtime": "automatic" }],
+    "./plugin.js"
+  ]
+}

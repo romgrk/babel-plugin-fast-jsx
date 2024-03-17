@@ -1,0 +1,4 @@
+{
+  "plugins": [["transform-fast-react-jsx", { "runtime": "invalidOption" }]],
+  "throws": "Runtime must be either \"classic\" or \"automatic\"."
+}

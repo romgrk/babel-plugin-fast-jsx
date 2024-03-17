@@ -1,0 +1,4 @@
+{
+  "plugins": [["transform-fast-react-jsx", { "runtime": "automatic" }]],
+  "sourceType": "script"
+}

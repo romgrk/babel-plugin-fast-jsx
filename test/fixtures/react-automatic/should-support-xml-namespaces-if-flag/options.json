@@ -1,0 +1,11 @@
+{
+  "plugins": [
+    [
+      "transform-fast-react-jsx",
+      {
+        "throwIfNamespace": false,
+        "runtime": "automatic"
+      }
+    ]
+  ]
+}

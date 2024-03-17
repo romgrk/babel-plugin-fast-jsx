@@ -1,0 +1,5 @@
+{
+  "plugins": [
+    ["transform-fast-react-jsx", { "pragma": "h", "pure": true, "runtime": "classic" }]
+  ]
+}

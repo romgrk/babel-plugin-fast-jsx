@@ -1,0 +1,70 @@
+{
+  "name": "babel-plugin-transform-fast-react-jsx",
+  "version": "0.1.0",
+  "type": "commonjs",
+  "description": "Turn JSX into React function calls",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/romgrk/babel-plugin-transform-fast-react-jsx.git"
+  },
+  "homepage": "https://github.com/romgrk/babel-plugin-transform-fast-react-jsx",
+  "license": "MIT",
+  "main": "./lib/index.js",
+  "scripts": {
+    "test": "jest ./test/index.js"
+  },
+  "keywords": [
+    "babel-plugin"
+  ],
+  "dependencies": {
+    "@babel/helper-annotate-as-pure": "^7.0.0-0",
+    "@babel/helper-module-imports": "^7.0.0-0",
+    "@babel/helper-plugin-utils": "^7.0.0-0",
+    "@babel/plugin-syntax-jsx": "^7.0.0-0",
+    "@babel/types": "^7.0.0-0"
+  },
+  "peerDependencies": {
+    "@babel/core": "^7.0.0-0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.0.0-0",
+    "@babel/helper-plugin-test-runner": "^7.0.0-0",
+    "@babel/plugin-transform-arrow-functions": "^7.23.3",
+    "@babel/traverse": "^7.0.0-0",
+    "@types/babel__core": "^7.20.5",
+    "@types/babel__helper-module-imports": "^7.18.3",
+    "@types/babel__traverse": "^7.20.5",
+    "@types/node": "^20.11.28",
+    "babel-plugin-transform-react-display-name": "^6.25.0",
+    "core": "link:@types/@babel/core",
+    "jest": "^29.7.0",
+    "jest-light-runner": "^0.6.0"
+  },
+  "engines": {
+    "node": ">=6.9.0"
+  },
+  "author": "romgrk",
+  "conditions": {
+    "BABEL_8_BREAKING": [
+      {
+        "engines": {
+          "node": "^16.20.0 || ^18.16.0 || >=20.0.0"
+        }
+      },
+      {
+        "exports": null
+      }
+    ],
+    "USE_ESM": [
+      {
+        "type": "module"
+      },
+      null
+    ]
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./lib/development": "./lib/development.js",
+    "./package.json": "./package.json"
+  }
+}
