@@ -2,10 +2,12 @@
 
 > Inline React JSX calls
 
+## Why
+
 JSX in React normally desugars to something like this:
 
 ```javascript.jsx
-// From this
+// from this
 import { jsx as _jsx } from 'react/jsx-runtime';
 
 function Component({ children }) {
@@ -15,10 +17,8 @@ function Component({ children }) {
     </div>
   )
 }
-```
 
-```javascript
-// To this
+// to this
 import { jsx as _jsx } from 'react/jsx-runtime';
 
 function Component({ children }) {
@@ -56,7 +56,7 @@ function Component({ children }) {
 }
 ```
 
-It's also smart enough to inline `defaultProps` handling where applicable:
+No more unnecessary copies, no more looping through `defaultProps`, no more megamorphic object accesses. It's also smart enough to inline `defaultProps` handling where applicable. That means when the component type is not a string like `'div'`, but a function component:
 
 ```javascript
 Component.defaultProps = { /* ... */ }
@@ -82,28 +82,25 @@ return /*#__PURE__*/{
   _owner: __react_CurrentOwner.current
 };
 ```
+## Usage
 
-> [!CAUTION]
+> [!WARNING]
 > This plugin has one subtle difference with regular JSX
 
-The `key` and `ref` props are magic, and only statically applied props are extracted.
+The `key` and `ref` props are magic, and only *statically applied* props are extracted. This could cause subtle bugs if you use this non-idiomatic pattern. Note that React is *possibly* also going to make a similar change at the next major version, from [some experimental flags](https://github.com/facebook/react/blob/b09e102ff1e2aaaf5eb6585b04609ac7ff54a5c8/packages/shared/ReactFeatureFlags.js#L186-L188) I could see there.
 
 ```javascript
+// from this
 function Component({ children }) {
   const dynamicProps = { ref: dynamicRef, key: 'dynamic' }
   return (
-    <div
-      ref={staticRef}
-      key='static'
-      {...dynamicProps}
-    >
+    <div ref={staticRef} key='static' {...dynamicProps}>
       {children}
     </div>
   )
 }
-```
 
-```javascript
+// to this
 function Component({ children }) {
   const dynamicProps = { ref: dynamicRef, key: 'dynamic' }
   return ({
@@ -117,7 +114,6 @@ function Component({ children }) {
 ```
 
 
-## Usage
 
 ### Vite
 
