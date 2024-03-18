@@ -68,15 +68,17 @@ export default function createPlugin({
     //   pragmaFrag: PRAGMA_FRAG_DEFAULT = DEFAULT.pragmaFrag,
     // } = options;
 
-    const { useSpread = false, useBuiltIns = false } = options;
-    const extendExpression = useBuiltIns ? toMemberExpression('Object.assign') : t.identifier('_extend')
+    const { useSpread = false, useBuiltIns = true } = options;
+    const extendName = useBuiltIns ? 'Object.assign' : '_extend'
+    const extendExpression = toMemberExpression(extendName)
+    let source = ''
 
     return {
       name,
       // inherits: jsx,
       visitor: {
         Program: {
-          enter(_path: NodePath, pass: PluginPass) {
+          enter(path: NodePath, pass: PluginPass) {
             // let runtime: string = RUNTIME_DEFAULT;
             // let source: string = IMPORT_SOURCE_DEFAULT;
             // let pragma: string = PRAGMA_DEFAULT;
@@ -84,6 +86,8 @@ export default function createPlugin({
             // let sourceSet = !!options.importSource;
             // let pragmaSet = !!options.pragma;
             // let pragmaFragSet = !!options.pragmaFrag;
+
+            source = path.getSource()
 
             const state = { ...EMPTY_STATE }
             pass.set(PLUGIN_NAME, state)
@@ -174,18 +178,10 @@ export default function createPlugin({
             const [type, props, maybeKey] = node.arguments as t.Expression[]
 
             const {
-              shouldInline,
               ref,
               key,
               updatedProps,
-            } = processProps(node, type, props, maybeKey)
-
-            if (!shouldInline) {
-              console.log('CANNOT INLINE:')
-              console.log(path.toString())
-              console.log('-----')
-              return
-            }
+            } = processProps(path, type, props, maybeKey)
 
             const replacement = t.objectExpression([
               t.objectProperty(t.identifier('$$typeof'), t.identifier(state.reactElementTypeIdentifier)),
@@ -203,38 +199,48 @@ export default function createPlugin({
       },
     };
 
-    function processProps(node: NodePath['node'], type: t.Expression, props: t.Expression, maybeKey?: t.Expression) {
+    function processProps(path: NodePath, type: t.Expression, props: t.Expression, maybeKey?: t.Expression) {
       const isStaticType = t.isStringLiteral(type)
 
-      let shouldInline = false
-      let key = maybeKey ?? t.buildUndefinedNode()
-      let ref = t.buildUndefinedNode() as t.Expression
+      let key = maybeKey ?? t.nullLiteral()
+      let ref = t.nullLiteral() as t.Expression
       let updatedProps = props
 
-      if (isStaticObject(props)) {
-        shouldInline = true
+      const extractProps = (props: t.ObjectExpression) => {
         props.properties = props.properties.filter(prop => {
           if (t.isObjectProperty(prop) && !prop.computed) {
             if (t.isIdentifier(prop.key) && isRefKey(prop.key.name)) {
-              if (prop.key.name === 'ref') {
-                ref = t.cloneNode(prop.value) as t.Expression
-              }
-              if (prop.key.name === 'key') {
-                key = t.cloneNode(prop.value) as t.Expression
-              }
+              if (prop.key.name === 'ref') { ref = t.cloneNode(prop.value) as t.Expression }
+              if (prop.key.name === 'key') { key = t.cloneNode(prop.value) as t.Expression }
               return false
             }
           }
           return true
         })
-        if (!isStaticType) {
-          updatedProps = addDefaultProps(type, props)
-        }
       }
-      // TODO: handle `_extend()`, `Object.assign()`, `{...}`
+
+      if (isStaticObject(props)) {
+        extractProps(props)
+      } else if (isExtendCall(props)) {
+        props.arguments.forEach(arg => {
+          if (t.isObjectExpression(arg)) {
+            extractProps(arg)
+          }
+        })
+      } else {
+        console.log('CANNOT INLINE:')
+        console.log(path.toString())
+        console.log('-----')
+        console.log(type)
+        console.log(props)
+        throw new Error('unimplemented')
+      }
+
+      if (!isStaticType) {
+        updatedProps = addDefaultProps(type, props)
+      }
 
       return {
-        shouldInline,
         ref,
         key,
         updatedProps,
@@ -247,6 +253,13 @@ export default function createPlugin({
         (t.isObjectMethod(prop) && !prop.computed)
       )
     }
+
+    function isExtendCall(node: t.Expression): node is t.CallExpression {
+      return t.isCallExpression(node) &&
+        (source.slice(node.callee.loc.start.index, node.callee.loc.end.index) === '_extends' ||
+         source.slice(node.callee.loc.start.index, node.callee.loc.end.index) === 'Object.assign')
+    }
+
 
     function isRefKey(value: string) {
       return value === 'ref' || value === 'key'
@@ -270,9 +283,11 @@ export default function createPlugin({
           ])
         }
       } else {
-        console.log(type)
-        console.log(props)
-        throw new Error('unimplemented')
+        extendedProps = t.callExpression(extendExpression, [
+          t.objectExpression([]),
+          defaultProps(),
+          t.cloneNode(props, true),
+        ])
       }
 
       return t.conditionalExpression(
