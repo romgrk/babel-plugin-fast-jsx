@@ -1,7 +1,0 @@
-{
-  "plugins": [
-    ["transform-fast-react-jsx", { "runtime": "automatic" }],
-    "transform-modules-commonjs"
-  ],
-  "sourceType": "module"
-}

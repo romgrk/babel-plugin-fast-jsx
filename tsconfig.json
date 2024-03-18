@@ -1,0 +1,21 @@
+{
+  "include": [
+    "./src/*"
+  ],
+  "compilerOptions": {
+    "outDir": "./lib",
+    "target": "ES2018",
+    "module": "CommonJS",
+    "lib": ["ESNext"],
+    "declaration": true,
+    // "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "skipLibCheck": false,
+    "resolveJsonModule": true,
+    "noImplicitThis": true,
+    "noImplicitAny": true,
+    "strictBindCallApply": true,
+    "incremental": true
+  }
+}

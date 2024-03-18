@@ -1,7 +1,0 @@
-{
-  "plugins": [
-    "syntax-jsx",
-    ["transform-fast-react-jsx", { "runtime": "classic" }],
-    "transform-arrow-functions"
-  ]
-}

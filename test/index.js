@@ -1,4 +1,3 @@
-import * as Runner from "@babel/helper-plugin-test-runner";
-const runner = Runner.default.default
+import runner from "@babel/helper-plugin-test-runner";
 
-runner(import.meta.url);
+runner.default(import.meta.url);

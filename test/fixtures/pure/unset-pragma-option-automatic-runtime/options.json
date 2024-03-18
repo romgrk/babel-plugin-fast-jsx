@@ -1,6 +1,0 @@
-{
-  "plugins": [
-    ["transform-fast-react-jsx", { "pragma": "h", "runtime": "automatic"  }]
-  ],
-  "throws": "pragma and pragmaFrag cannot be set when runtime is automatic."
-}

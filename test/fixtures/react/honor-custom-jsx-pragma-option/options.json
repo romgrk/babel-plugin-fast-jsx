@@ -1,3 +1,0 @@
-{
-  "plugins": [["transform-fast-react-jsx", { "pragma": "dom", "runtime": "classic" }]]
-}

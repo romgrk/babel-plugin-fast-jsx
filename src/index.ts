@@ -1,10 +1,10 @@
 /* eslint-disable @babel/development/plugin-name */
 
-import createPlugin from "./create-plugin.ts";
+import createPlugin from './create-plugin';
 
 export default createPlugin({
-  name: "transform-fast-react-jsx",
+  name: 'fast-jsx',
   development: false,
 });
 
-export type { Options } from "./create-plugin.ts";
+export type { Options } from './create-plugin';

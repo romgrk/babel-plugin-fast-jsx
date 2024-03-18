@@ -1,16 +1,17 @@
 {
-  "name": "babel-plugin-transform-fast-react-jsx",
+  "name": "babel-plugin-fast-jsx",
   "version": "0.1.0",
   "type": "commonjs",
-  "description": "Turn JSX into React function calls",
+  "description": "Turn compiled JSX into faster JSX",
   "repository": {
     "type": "git",
-    "url": "https://github.com/romgrk/babel-plugin-transform-fast-react-jsx.git"
+    "url": "https://github.com/romgrk/babel-plugin-fast-jsx.git"
   },
-  "homepage": "https://github.com/romgrk/babel-plugin-transform-fast-react-jsx",
+  "homepage": "https://github.com/romgrk/babel-plugin-fast-jsx",
   "license": "MIT",
   "main": "./lib/index.js",
   "scripts": {
+    "build": "tsc",
     "test": "jest ./test/index.js"
   },
   "keywords": [
@@ -36,9 +37,10 @@
     "@types/babel__traverse": "^7.20.5",
     "@types/node": "^20.11.28",
     "babel-plugin-transform-react-display-name": "^6.25.0",
-    "core": "link:@types/@babel/core",
     "jest": "^29.7.0",
-    "jest-light-runner": "^0.6.0"
+    "jest-light-runner": "^0.6.0",
+    "semver": "^7.6.0",
+    "typescript": "^5.4.2"
   },
   "engines": {
     "node": ">=6.9.0"

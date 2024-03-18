@@ -1,3 +1,0 @@
-{
-  "plugins": [["transform-fast-react-jsx", { "pragma": "foo.bar", "runtime": "classic" }]]
-}
