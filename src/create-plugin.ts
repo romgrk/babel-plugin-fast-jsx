@@ -175,6 +175,10 @@ export default function createPlugin({
               throw new Error('unimplemented')
             }
 
+            node.leadingComments?.forEach(c => {
+              c.value = ''
+            })
+
             const [type, props, maybeKey] = node.arguments as t.Expression[]
 
             const {
