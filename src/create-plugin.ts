@@ -1,50 +1,27 @@
-// import jsx from "@babel/plugin-syntax-jsx";
 // @ts-ignore todo
-import { declare } from "@babel/helper-plugin-utils";
-import { template, types as t } from "@babel/core";
-import type { PluginPass } from "@babel/core";
-import type { NodePath, Scope, Visitor } from "@babel/traverse";
-import { addNamed, addNamespace, isModule } from "@babel/helper-module-imports";
-// @ts-ignore todo
-import annotateAsPure from "@babel/helper-annotate-as-pure";
-import type {
-  CallExpression,
-  Class,
-  Expression,
-  Identifier,
-  JSXAttribute,
-  JSXElement,
-  JSXFragment,
-  JSXOpeningElement,
-  JSXSpreadAttribute,
-  MemberExpression,
-  ObjectExpression,
-  Program,
-} from "@babel/types";
+import { declare } from '@babel/helper-plugin-utils';
+import { template, types as t } from '@babel/core';
+import type { PluginPass } from '@babel/core';
+import type { NodePath, Scope, Visitor } from '@babel/traverse';
+import { addNamed, addNamespace, isModule } from '@babel/helper-module-imports';
+import type { Identifier, MemberExpression, Program } from '@babel/types';
 
-const DEFAULT = {
-  importSource: "react",
-  runtime: "automatic",
-  pragma: "React.createElement",
-  pragmaFrag: "React.Fragment",
-};
-
-const PRELUDE = `
-import { react as _react } from 'react'
-const _REACT_ELEMENT_TYPE = Symbol.for('react.element');
-const _ReactSharedInternals = React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
-const _ReactCurrentOwner = ReactSharedInternals.ReactCurrentOwner;
-function _fastJsx(type, key, ref, props) {
-  return {
-    $$typeof: _REACT_ELEMENT_TYPE,
-    type,
-    key,
-    ref,
-    props,
-    _owner: _ReactCurrentOwner.current
-  };
-}
-`;
+// Result
+// ======
+//
+// import { react as __react } from 'react'
+// const __react_ElementType = Symbol.for('react.element');
+// const __react_CurrentOwner = React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentOwner;
+// function _fastJsx(type, key, ref, props) {
+//   return {
+//     $$typeof: __react_ElementType,
+//     type,
+//     key,
+//     ref,
+//     props,
+//     _owner: __react_CurrentOwner.current
+//   };
+// }
 
 const PLUGIN_NAME = 'babel-plugin-fast-jsx'
 
@@ -57,7 +34,6 @@ export interface Options {
   pragma?: string;
   pragmaFrag?: string;
   pure?: string;
-  runtime?: "automatic" | "classic";
   throwIfNamespace?: boolean;
   useBuiltIns: boolean;
   useSpread?: boolean;
@@ -67,8 +43,8 @@ const EMPTY_STATE = {
   jsxIdentifier: null as string | null,
   jsxsIdentifier: null as string | null,
   reactIdentifier: null as string | null,
-  reactElementTypeIdentifier: '_REACT_ELEMENT_TYPE',
-  reactOwnerIdentifier: '_ReactCurrentOwner',
+  reactElementTypeIdentifier: '__react_ElementType',
+  reactOwnerIdentifier: '__react_CurrentOwner',
   needsPrelude: false,
   lastImport: null as NodePath<t.ImportDeclaration> | null,
 }
@@ -82,34 +58,29 @@ export default function createPlugin({
   development: boolean;
 }) {
   return declare((_: any, options: Options) => {
-    const {
-      pure: PURE_ANNOTATION,
+    // const {
+    //   pure: PURE_ANNOTATION,
+    //   throwIfNamespace = true,
+    //   filter,
+    //   runtime: RUNTIME_DEFAULT = "automatic",
+    //   importSource: IMPORT_SOURCE_DEFAULT = DEFAULT.importSource,
+    //   pragma: PRAGMA_DEFAULT = DEFAULT.pragma,
+    //   pragmaFrag: PRAGMA_FRAG_DEFAULT = DEFAULT.pragmaFrag,
+    // } = options;
 
-      throwIfNamespace = true,
-
-      filter,
-
-      runtime: RUNTIME_DEFAULT = "automatic",
-      importSource: IMPORT_SOURCE_DEFAULT = DEFAULT.importSource,
-      pragma: PRAGMA_DEFAULT = DEFAULT.pragma,
-      pragmaFrag: PRAGMA_FRAG_DEFAULT = DEFAULT.pragmaFrag,
-    } = options;
-
-    // eslint-disable-next-line no-var
-    var { useSpread = false, useBuiltIns = false } = options;
+    const { useSpread = false, useBuiltIns = false } = options;
+    const extendExpression = useBuiltIns ? toMemberExpression('Object.assign') : t.identifier('_extend')
 
     return {
       name,
       // inherits: jsx,
       visitor: {
         Program: {
-          enter(path: NodePath, pass: PluginPass) {
+          enter(_path: NodePath, pass: PluginPass) {
             // let runtime: string = RUNTIME_DEFAULT;
-            //
             // let source: string = IMPORT_SOURCE_DEFAULT;
             // let pragma: string = PRAGMA_DEFAULT;
             // let pragmaFrag: string = PRAGMA_FRAG_DEFAULT;
-            //
             // let sourceSet = !!options.importSource;
             // let pragmaSet = !!options.pragma;
             // let pragmaFragSet = !!options.pragmaFrag;
@@ -118,12 +89,13 @@ export default function createPlugin({
             pass.set(PLUGIN_NAME, state)
           },
 
-          exit(path: NodePath, pass: PluginPass) {
+          exit(_path: NodePath, pass: PluginPass) {
             const state = pass.get(PLUGIN_NAME) as State
             if (state.needsPrelude) {
               const needReactImport = state.reactIdentifier === null
-              const reactIdentifier = state.reactIdentifier ?? '_react'
+              const reactIdentifier = state.reactIdentifier ?? '__react'
 
+              // Insert `const __react_ElementType = Symbol.for('react.element')`
               state.lastImport.insertAfter(
                 t.variableDeclaration('var', [
                   t.variableDeclarator(
@@ -136,6 +108,7 @@ export default function createPlugin({
                 ])
               )
 
+              // Insert `const __react_CurrentOwner = React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentOwner`
               state.lastImport.insertAfter(
                 t.variableDeclaration('var', [
                   t.variableDeclarator(
@@ -146,10 +119,11 @@ export default function createPlugin({
                 ])
               )
 
+              // Import react if it wasn't already imported
               if (needReactImport) {
                 const reactImport =
                   t.importDeclaration(
-                    [t.importSpecifier(t.identifier('_react'), t.identifier('react'))],
+                    [t.importSpecifier(t.identifier(reactIdentifier), t.identifier('react'))],
                     t.stringLiteral('react'),
                 )
                 state.lastImport.insertAfter(reactImport)
@@ -192,19 +166,26 @@ export default function createPlugin({
           const { node } = path
           if (t.isIdentifier(node.callee) && node.callee.name === state.jsxIdentifier) {
             state.needsPrelude = true
-            console.log('JSX FOUND')
-            console.log(node)
 
-            // FIXME: handle some of these cases?
             if (!node.arguments.every(a => t.isExpression(a))){
-              return
+              throw new Error('unimplemented')
             }
 
             const [type, props, maybeKey] = node.arguments as t.Expression[]
 
-            const ref = findRef(props) ?? t.buildUndefinedNode()
-            const key = findKey(props, maybeKey) ?? t.buildUndefinedNode()
-            const updatedProps = props
+            const {
+              shouldInline,
+              ref,
+              key,
+              updatedProps,
+            } = processProps(node, type, props, maybeKey)
+
+            if (!shouldInline) {
+              console.log('CANNOT INLINE:')
+              console.log(path.toString())
+              console.log('-----')
+              return
+            }
 
             const replacement = t.objectExpression([
               t.objectProperty(t.identifier('$$typeof'), t.identifier(state.reactElementTypeIdentifier)),
@@ -222,40 +203,85 @@ export default function createPlugin({
       },
     };
 
-    function findRef(props: t.Expression): t.Expression {
-      return undefined
+    function processProps(node: NodePath['node'], type: t.Expression, props: t.Expression, maybeKey?: t.Expression) {
+      const isStaticType = t.isStringLiteral(type)
+
+      let shouldInline = false
+      let key = maybeKey ?? t.buildUndefinedNode()
+      let ref = t.buildUndefinedNode() as t.Expression
+      let updatedProps = props
+
+      if (isStaticObject(props)) {
+        shouldInline = true
+        props.properties = props.properties.filter(prop => {
+          if (t.isObjectProperty(prop) && !prop.computed) {
+            if (t.isIdentifier(prop.key) && isRefKey(prop.key.name)) {
+              if (prop.key.name === 'ref') {
+                ref = t.cloneNode(prop.value) as t.Expression
+              }
+              if (prop.key.name === 'key') {
+                key = t.cloneNode(prop.value) as t.Expression
+              }
+              return false
+            }
+          }
+          return true
+        })
+        if (!isStaticType) {
+          updatedProps = addDefaultProps(type, props)
+        }
+      }
+      // TODO: handle `_extend()`, `Object.assign()`, `{...}`
+
+      return {
+        shouldInline,
+        ref,
+        key,
+        updatedProps,
+      }
     }
 
-    function findKey(props: t.Expression, maybeKey?: t.Expression): t.Expression {
-      return undefined ?? maybeKey
+    function isStaticObject(node: t.Expression): node is t.ObjectExpression {
+      return t.isObjectExpression(node) && node.properties.every(prop =>
+        (t.isObjectProperty(prop) && !prop.computed) ||
+        (t.isObjectMethod(prop) && !prop.computed)
+      )
     }
 
-    // Returns whether `this` is allowed at given scope.
-    // function isThisAllowed(scope: Scope) {
-    //   // This specifically skips arrow functions as they do not rewrite `this`.
-    //   do {
-    //     const { path } = scope;
-    //     if (path.isFunctionParent() && !path.isArrowFunctionExpression()) {
-    //       if (!path.isMethod()) {
-    //         // If the closest parent is a regular function, `this` will be rebound, therefore it is fine to use `this`.
-    //         return true;
-    //       }
-    //       // Current node is within a method, so we need to check if the method is a constructor.
-    //       if (path.node.kind !== "constructor") {
-    //         // We are not in a constructor, therefore it is always fine to use `this`.
-    //         return true;
-    //       }
-    //       // Now we are in a constructor. If it is a derived class, we do not reference `this`.
-    //       return !isDerivedClass(path.parentPath.parentPath as NodePath<Class>);
-    //     }
-    //     if (path.isTSModuleBlock()) {
-    //       // If the closest parent is a TS Module block, `this` will not be allowed.
-    //       return false;
-    //     }
-    //   } while ((scope = scope.parent));
-    //   // We are not in a method or function. It is fine to use `this`.
-    //   return true;
-    // }
+    function isRefKey(value: string) {
+      return value === 'ref' || value === 'key'
+    }
+
+    function addDefaultProps(type: t.Expression, props: t.Expression) {
+      const defaultProps = () => t.memberExpression(t.cloneNode(type), t.identifier('defaultProps'))
+
+      let extendedProps
+      if (t.isObjectExpression(props)) {
+        if (useSpread) {
+          // { ...defaultProps, props }
+          props.properties.unshift(
+            t.spreadElement(defaultProps()))
+          return props
+        } else {
+          extendedProps = t.callExpression(extendExpression, [
+            t.objectExpression([]),
+            defaultProps(),
+            t.cloneNode(props, true),
+          ])
+        }
+      } else {
+        console.log(type)
+        console.log(props)
+        throw new Error('unimplemented')
+      }
+
+      return t.conditionalExpression(
+        defaultProps(),
+        extendedProps,
+        props,
+      )
+    }
+
   });
 
   function getSource(source: string, importName: string) {
@@ -383,3 +409,29 @@ function hasProto(node: t.ObjectExpression) {
   );
 }
 
+// Returns whether `this` is allowed at given scope.
+// function isThisAllowed(scope: Scope) {
+//   // This specifically skips arrow functions as they do not rewrite `this`.
+//   do {
+//     const { path } = scope;
+//     if (path.isFunctionParent() && !path.isArrowFunctionExpression()) {
+//       if (!path.isMethod()) {
+//         // If the closest parent is a regular function, `this` will be rebound, therefore it is fine to use `this`.
+//         return true;
+//       }
+//       // Current node is within a method, so we need to check if the method is a constructor.
+//       if (path.node.kind !== "constructor") {
+//         // We are not in a constructor, therefore it is always fine to use `this`.
+//         return true;
+//       }
+//       // Now we are in a constructor. If it is a derived class, we do not reference `this`.
+//       return !isDerivedClass(path.parentPath.parentPath as NodePath<Class>);
+//     }
+//     if (path.isTSModuleBlock()) {
+//       // If the closest parent is a TS Module block, `this` will not be allowed.
+//       return false;
+//     }
+//   } while ((scope = scope.parent));
+//   // We are not in a method or function. It is fine to use `this`.
+//   return true;
+// }
