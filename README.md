@@ -147,3 +147,7 @@ Be aware that all browser devtools are based on sample-based profiling, which ta
 ### Is this usable in production today?
 
 There is one issue remaining, the plugin is injecting `_jsxFromOwned(Extends)` in every module scope that uses it. With some help from the Babel gods this should be no more than a few hours to fix. Other than that it's pretty much usable. I have tested it with a few major component libraries, it compiles correctly.
+
+## License
+
+This code is released to the Public Domain. No Rights Reserved.
