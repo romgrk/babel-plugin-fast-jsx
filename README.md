@@ -121,6 +121,9 @@ return {
 Due to limitatations in current JSX conventions, there are however cases that can't be inlined, such as the one below. It uses a destructured `otherProps` object that might contain another `.ref` or `.key`. In those cases, this plugin transforms the call to a slightly more efficient version of `jsxProd()` that considers it has what Rust calls "mutable ownership" over its props argument: it's free to `delete props.ref` instead of copying the object over again.
 
 ```javascript
+// original
+const component = <Component ref={handleRef} {...otherProps} />
+
 // from this
 const component = _jsx(Component, _extends({ ref: handleRef }, otherProps));
 // to this (combines _jsx and _extends to avoid copying)
