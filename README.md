@@ -2,6 +2,8 @@
 
 > Inline React `jsxProd()` calls
 
+##### Table of contents
+
 - [Usage](#usage)
 - [Why?](#why)
 - [FAQ](#faq)
