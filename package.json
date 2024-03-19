@@ -1,6 +1,6 @@
 {
   "name": "babel-plugin-fast-jsx",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "commonjs",
   "description": "Turn compiled JSX into faster JSX",
   "repository": {
