@@ -8,7 +8,6 @@
     "module": "CommonJS",
     "lib": ["ESNext"],
     "declaration": true,
-    // "moduleResolution": "Bundler",
     "esModuleInterop": true,
     "isolatedModules": true,
     "skipLibCheck": false,

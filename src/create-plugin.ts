@@ -1,6 +1,7 @@
 // @ts-ignore todo
 import { declare } from '@babel/helper-plugin-utils';
 import { template, types as t } from '@babel/core';
+import { parse } from '@babel/core';
 import type { PluginPass } from '@babel/core';
 import type { NodePath, Scope, Visitor } from '@babel/traverse';
 import { addNamed, addNamespace, isModule } from '@babel/helper-module-imports';
@@ -25,6 +26,89 @@ import type { Identifier, MemberExpression, Program } from '@babel/types';
 
 const PLUGIN_NAME = 'babel-plugin-fast-jsx'
 
+const JSX_FROM_OWNED_EXTENDS = parse(`
+  function _jsxFromOwnedExtends() {
+    // type, maybeKey, ownedProps, ...props
+    var type = arguments[0]
+    var props = arguments[2]
+    var key = arguments[1] != null ? arguments[1] : props.key;
+    var ref = null;
+
+    var defaultProps = type.defaultProps
+    if (defaultProps) {
+      for (var field in defaultProps) {
+        if (Object.prototype.hasOwnProperty.call(defaultProps, field)) {
+          props[field] = defaultProps[field];
+        }
+      }
+    }
+
+    for (var i = 3; i < arguments.length; i++) {
+      var other = arguments[i];
+      for (var field in other) {
+        if (Object.prototype.hasOwnProperty.call(other, field)) {
+          props[field] = other[field];
+        }
+      }
+    }
+
+    key = 'key' in props ? props.key : key
+    ref = 'ref' in props ? props.ref : ref
+
+    delete props.ref
+    delete props.key
+
+    return {
+      $$typeof: __react_ElementType,
+      type: type,
+      ref: ref,
+      key: key,
+      props: props,
+      _owner: __react_CurrentOwner.current
+    };
+  }
+  `,
+  { configFile: false }
+).program.body[0];
+const jsxFromOwnedExtendsExpression = () => t.cloneNode(JSX_FROM_OWNED_EXTENDS)
+
+const JSX_FROM_OWNED = parse(`
+  function _jsxFromOwned(type, maybeKey, props) {
+    var defaultProps = type.defaultProps
+    if (defaultProps) {
+      for (var field in defaultProps) {
+        if (Object.prototype.hasOwnProperty.call(defaultProps, field)) {
+          props[field] = defaultProps[field];
+        }
+      }
+    }
+
+    var key = maybeKey
+    if ('key' in props) {
+      key = props.key
+      delete props.key
+    }
+    var ref = null
+    if ('ref' in props) {
+      ref = props.ref
+      delete props.ref
+    }
+
+    return {
+      $$typeof: __react_ElementType,
+      type: type,
+      ref: ref,
+      key: key,
+      props: props,
+      _owner: __react_CurrentOwner.current
+    };
+  }
+  `,
+  { configFile: false }
+).program.body[0];
+const jsxFromOwnedExpression = () => t.cloneNode(JSX_FROM_OWNED)
+
+
 const get = (pass: PluginPass, name: string) => pass.get(`@babel/plugin-react-jsx/${name}`);
 const set = (pass: PluginPass, name: string, v: any) => pass.set(`@babel/plugin-react-jsx/${name}`, v);
 
@@ -45,7 +129,11 @@ const EMPTY_STATE = {
   reactIdentifier: null as string | null,
   reactElementTypeIdentifier: '__react_ElementType',
   reactOwnerIdentifier: '__react_CurrentOwner',
+  jsxFromOwnedIdentifier: '_jsxFromOwned',
+  jsxFromOwnedExtendsIdentifier: '_jsxFromOwnedExtends',
   needsPrelude: false,
+  needsJsxFromOwned: false,
+  needsJsxFromOwnedExtends: false,
   lastImport: null as NodePath<t.ImportDeclaration> | null,
 }
 type State = typeof EMPTY_STATE
@@ -70,7 +158,7 @@ export default function createPlugin({
 
     const { useSpread = false, useBuiltIns = true } = options;
     const extendName = useBuiltIns ? 'Object.assign' : '_extend'
-    const extendExpression = toMemberExpression(extendName)
+    const extendExpression = () => toMemberExpression(extendName)
     let source = ''
 
     return {
@@ -88,13 +176,21 @@ export default function createPlugin({
             // let pragmaFragSet = !!options.pragmaFrag;
 
             source = path.getSource()
-
             const state = { ...EMPTY_STATE }
             pass.set(PLUGIN_NAME, state)
           },
 
           exit(_path: NodePath, pass: PluginPass) {
             const state = pass.get(PLUGIN_NAME) as State
+
+            if (state.needsJsxFromOwned) {
+              state.lastImport.insertAfter(jsxFromOwnedExpression())
+            }
+
+            if (state.needsJsxFromOwnedExtends) {
+              state.lastImport.insertAfter(jsxFromOwnedExtendsExpression())
+            }
+
             if (state.needsPrelude) {
               const needReactImport = state.reactIdentifier === null
               const reactIdentifier = state.reactIdentifier ?? '__react'
@@ -127,7 +223,7 @@ export default function createPlugin({
               if (needReactImport) {
                 const reactImport =
                   t.importDeclaration(
-                    [t.importSpecifier(t.identifier(reactIdentifier), t.identifier('react'))],
+                    [t.importNamespaceSpecifier(t.identifier(reactIdentifier))],
                     t.stringLiteral('react'),
                 )
                 state.lastImport.insertAfter(reactImport)
@@ -168,94 +264,106 @@ export default function createPlugin({
         CallExpression(path: NodePath<t.CallExpression>, pass: PluginPass) {
           const state = pass.get(PLUGIN_NAME) as State
           const { node } = path
-          if (t.isIdentifier(node.callee) && node.callee.name === state.jsxIdentifier) {
+
+          const isJSX = t.isIdentifier(node.callee) && (
+            node.callee.name === state.jsxIdentifier ||
+            node.callee.name === state.jsxsIdentifier
+          )
+
+          if (isJSX) {
             state.needsPrelude = true
 
             if (!node.arguments.every(a => t.isExpression(a))){
               throw new Error('unimplemented')
             }
 
+            // Remove the PURE annotations, not needed anymore
             node.leadingComments?.forEach(c => {
               c.value = ''
             })
 
             const [type, props, maybeKey] = node.arguments as t.Expression[]
 
-            const {
-              ref,
-              key,
-              updatedProps,
-            } = processProps(path, type, props, maybeKey)
-
-            const replacement = t.objectExpression([
-              t.objectProperty(t.identifier('$$typeof'), t.identifier(state.reactElementTypeIdentifier)),
-              t.objectProperty(t.identifier('type'), type),
-              t.objectProperty(t.identifier('ref'), ref),
-              t.objectProperty(t.identifier('key'), key),
-              t.objectProperty(t.identifier('props'), updatedProps),
-              t.objectProperty(t.identifier('_owner'),
-                t.memberExpression(t.identifier(state.reactOwnerIdentifier), t.identifier('current'))),
-            ])
-
-            path.replaceWith(t.inherits(replacement, node))
+            if (isStaticObject(props)) {
+              processStaticObject(state, path, type, props, maybeKey)
+            } else if (isDynamicObject(props)) {
+              processDynamicObject(state, path, type, props, maybeKey)
+            } else if (isExtendCall(props)) {
+              processExtendCall(state, path, type, props, maybeKey)
+            } else {
+              console.log('CANNOT INLINE:')
+              console.log(path.toString())
+              console.log('-----')
+              console.log(type)
+              console.log(props)
+              throw new Error('unimplemented')
+            }
           }
         }
       },
     };
 
-    function processProps(path: NodePath, type: t.Expression, props: t.Expression, maybeKey?: t.Expression) {
+    function isStaticObject(node: t.Expression): node is t.ObjectExpression {
+      return t.isObjectExpression(node) && node.properties.every(prop =>
+        (t.isObjectProperty(prop) || t.isObjectMethod(prop)) && !prop.computed
+      )
+    }
+
+    function processStaticObject(state: State, path: NodePath, type: t.Expression, props: t.ObjectExpression, maybeKey?: t.Expression) {
       const isStaticType = t.isStringLiteral(type)
 
       let key = maybeKey ?? t.nullLiteral()
       let ref = t.nullLiteral() as t.Expression
-      let updatedProps = props
 
-      const extractProps = (props: t.ObjectExpression) => {
-        props.properties = props.properties.filter(prop => {
-          if (t.isObjectProperty(prop) && !prop.computed) {
-            if (t.isIdentifier(prop.key) && isRefKey(prop.key.name)) {
-              if (prop.key.name === 'ref') { ref = t.cloneNode(prop.value) as t.Expression }
-              if (prop.key.name === 'key') { key = t.cloneNode(prop.value) as t.Expression }
-              return false
-            }
-          }
-          return true
-        })
+      if (!t.isObjectExpression(props)) {
+        throw new Error('unreachable')
       }
 
-      if (isStaticObject(props)) {
-        extractProps(props)
-      } else if (isExtendCall(props)) {
-        props.arguments.forEach(arg => {
-          if (t.isObjectExpression(arg)) {
-            extractProps(arg)
+      props.properties = props.properties.filter(prop => {
+        if (t.isObjectProperty(prop) && !prop.computed) {
+          if (t.isIdentifier(prop.key) && isRefKey(prop.key.name)) {
+            if (prop.key.name === 'ref') { ref = t.cloneNode(prop.value) as t.Expression }
+            if (prop.key.name === 'key') { key = t.cloneNode(prop.value) as t.Expression }
+            return false
           }
-        })
-      } else {
-        console.log('CANNOT INLINE:')
-        console.log(path.toString())
-        console.log('-----')
-        console.log(type)
-        console.log(props)
-        throw new Error('unimplemented')
-      }
+        }
+        return true
+      })
 
+      let updatedProps = props as t.Expression
       if (!isStaticType) {
         updatedProps = addDefaultProps(type, props)
       }
 
-      return {
-        ref,
-        key,
-        updatedProps,
-      }
+      const replacement = t.objectExpression([
+        t.objectProperty(t.identifier('$$typeof'), t.identifier(state.reactElementTypeIdentifier)),
+        t.objectProperty(t.identifier('type'), type),
+        t.objectProperty(t.identifier('ref'), ref),
+        t.objectProperty(t.identifier('key'), key),
+        t.objectProperty(t.identifier('props'), updatedProps),
+        t.objectProperty(t.identifier('_owner'),
+          t.memberExpression(t.identifier(state.reactOwnerIdentifier), t.identifier('current'))),
+      ])
+
+      path.replaceWith(t.inherits(replacement, path.node))
     }
 
-    function isStaticObject(node: t.Expression): node is t.ObjectExpression {
-      return t.isObjectExpression(node) && node.properties.every(prop =>
-        (t.isObjectProperty(prop) && !prop.computed) ||
-        (t.isObjectMethod(prop) && !prop.computed)
+    function isDynamicObject(node: t.Expression): node is t.ObjectExpression {
+      return t.isObjectExpression(node) && !isStaticObject(node)
+    }
+
+    function processDynamicObject(state: State, path: NodePath, type: t.Expression, props: t.ObjectExpression, maybeKey?: t.Expression) {
+      state.needsJsxFromOwned = true
+
+      const replacement = t.callExpression(
+        t.identifier(state.jsxFromOwnedIdentifier), [
+          type,
+          maybeKey ?? t.nullLiteral(),
+          props,
+        ]
       )
+
+      path.replaceWith(t.inherits(replacement, path.node))
     }
 
     function isExtendCall(node: t.Expression): node is t.CallExpression {
@@ -264,6 +372,33 @@ export default function createPlugin({
          source.slice(node.callee.loc.start.index, node.callee.loc.end.index) === 'Object.assign')
     }
 
+    function processExtendCall(state: State, path: NodePath, type: t.Expression, call: t.CallExpression, maybeKey?: t.Expression) {
+      state.needsJsxFromOwnedExtends = true
+
+      const propArguments = call.arguments
+
+      const isStandardArguments =
+        propArguments.every(a =>
+          !t.isArgumentPlaceholder(a) &&
+          !t.isSpreadElement(a) &&
+          !t.isJSXNamespacedName(a))
+      const isFirstArgumentOwned = t.isObjectExpression(propArguments[0])
+
+      if (!isStandardArguments || !isFirstArgumentOwned) {
+        console.log(call)
+        throw new Error('invalid extend call')
+      }
+
+      const replacement = t.callExpression(
+        t.identifier(state.jsxFromOwnedExtendsIdentifier), [
+          type,
+          maybeKey ?? t.nullLiteral(),
+          ...call.arguments,
+        ]
+      )
+
+      path.replaceWith(t.inherits(replacement, path.node))
+    }
 
     function isRefKey(value: string) {
       return value === 'ref' || value === 'key'
@@ -280,14 +415,14 @@ export default function createPlugin({
             t.spreadElement(defaultProps()))
           return props
         } else {
-          extendedProps = t.callExpression(extendExpression, [
+          extendedProps = t.callExpression(extendExpression(), [
             t.objectExpression([]),
             defaultProps(),
             t.cloneNode(props, true),
           ])
         }
       } else {
-        extendedProps = t.callExpression(extendExpression, [
+        extendedProps = t.callExpression(extendExpression(), [
           t.objectExpression([]),
           defaultProps(),
           t.cloneNode(props, true),
