@@ -10,6 +10,8 @@
 
 ## Usage
 
+This is a proof-of-concept. Be sure to read the FAQ before using in production.
+
 ### Vite
 
 This should run on all files, including `node_modules`.
