@@ -2,9 +2,15 @@
 
 > Inline React `jsxProd()` calls
 
+- [Usage](#usage)
+- [Why?](#why)
+- [FAQ](#faq)
+
 ## Usage
 
 ### Vite
+
+This should run on all files, including `node_modules`.
 
 ```javascript
 import { defineConfig } from 'vite'
@@ -15,6 +21,7 @@ export default defineConfig({
   plugins: [
     react(),
     babel({
+      filter: /\.(jsx?|tsx?)/,
       babelConfig: {
         plugins: [
           ['babel-plugin-fast-jsx', {
@@ -29,6 +36,10 @@ export default defineConfig({
   ],
 })
 ```
+
+### Webpack
+
+I haven't tested, but it should be as easy as adding a babel-loader transform with the same config as the vite config above.
 
 ## Why
 
